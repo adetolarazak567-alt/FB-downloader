@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Facebook Video Downloader</title>
+<style>
+  :root {
+    --fb-blue: #1877f2;
+    --fb-blue-dark: #0f63cf;
+    --bg: #f0f2f5;
+    --text: #1c1e21;
+    --muted: #65676b;
+    --card: #fff;
+    --success: #00a400;
+    --danger: #e53935;
+    --shadow: 0 6px 20px rgba(0,0,0,0.08);
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--card);
+    border-bottom: 1px solid #e4e6eb;
+  }
+  .nav {
+    max-width: 980px; margin: 0 auto; padding: 14px 16px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .logo {
+    width: 38px; height: 38px; border-radius: 10px;
+    background: var(--fb-blue);
+    display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 22px;
+  }
+  .brand { font-weight: 800; font-size: 20px; letter-spacing: .2px; }
+  main { max-width: 980px; margin: 24px auto; padding: 0 16px; }
+  .card {
+    background: var(--card); border-radius: var(--radius); box-shadow: var(--shadow);
+    padding: 18px; border: 1px solid #e4e6eb;
+  }
+  .title { font-size: 20px; font-weight: 700; margin-bottom: 10px; }
+  .muted { color: var(--muted); font-size: 14px; }
+
+  /* Input row with clear (X) */
+  .input-wrap {
+    margin-top: 14px; position: relative;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .paste {
+    flex: 1; padding: 14px 44px 14px 16px;
+    border: 1px solid #ccd0d5; border-radius: 999px;
+    background: #fff;
+    font-size: 15px; outline: none;
+  }
+  .paste:focus { border-color: var(--fb-blue); box-shadow: 0 0 0 4px rgba(24,119,242,0.15); }
+  .clear-btn {
+    position: absolute; right: 8px;
+    width: 28px; height: 28px; border-radius: 999px;
+    display: grid; place-items: center;
+    border: none; cursor: pointer; background: #e4e6eb;
+    font-weight: 800; font-size: 16px; line-height: 0;
+    opacity: 0; pointer-events: none; transition: .2s;
+  }
+  .clear-btn.show { opacity: 1; pointer-events: auto; }
+  .go {
+    white-space: nowrap;
+    background: var(--fb-blue); color: #fff; border: none; cursor: pointer;
+    padding: 12px 18px; border-radius: 999px; font-weight: 700; font-size: 15px;
+  }
+  .go:disabled { opacity: .6; cursor: not-allowed; }
+  .go:hover { background: var(--fb-blue-dark); }
+
+  .result {
+    margin-top: 16px; display: none; gap: 16px; flex-wrap: wrap;
+  }
+  .thumb {
+    flex: 1 1 360px; min-width: 280px;
+    background: #000; border-radius: 14px; overflow: hidden; position: relative;
+    aspect-ratio: 16/9;
+  }
+  video, img.thumb-img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .meta {
+    flex: 1 1 240px; min-width: 240px;
+    display: grid; gap: 10px;
+  }
+  .file-row {
+    display: flex; align-items: center; justify-content: space-between;
+    background: #f7f8fa; padding: 12px 14px; border-radius: 12px; border: 1px solid #e4e6eb;
+  }
+  .dl {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--success); color: #fff; border: none; cursor: pointer;
+    padding: 10px 14px; border-radius: 999px; font-weight: 700;
+    text-decoration: none; font-size: 14px;
+  }
+  .status {
+    margin-top: 12px; font-size: 14px;
+  }
+  .status.ok { color: var(--success); }
+  .status.err { color: var(--danger); }
+
+  .spinner {
+    width: 18px; height: 18px; border: 3px solid #e4e6eb; border-top-color: var(--fb-blue);
+    border-radius: 50%; animation: spin 1s linear infinite; display: inline-block; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  footer { color: var(--muted); font-size: 12px; text-align: center; padding: 24px 0 48px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="nav">
+      <div class="logo">f</div>
+      <div class="brand">FB Video Downloader</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="card">
+      <div class="title">Paste a Facebook video link</div>
+      <div class="muted">Example: https://www.facebook.com/watch/?v=XXXXXXXXX or a public post/video URL.</div>
+
+      <div class="input-wrap">
+        <input id="url" class="paste" type="url" placeholder="Paste Facebook link here…" autocomplete="off" />
+        <button id="clear" class="clear-btn" aria-label="Clear">×</button>
+        <button id="fetch" class="go">Get Video</button>
+      </div>
+
+      <div id="status" class="status"></div>
+
+      <div id="result" class="result">
+        <div class="thumb">
+          <video id="preview" playsinline muted autoplay loop controls></video>
+          <img id="fallbackThumb" class="thumb-img" alt="Video thumbnail" style="display:none;" />
+        </div>
+        <div class="meta">
+          <div id="title" class="title" style="font-size:16px;"></div>
+          <div class="file-row">
+            <div>
+              <div style="font-weight:700;">Best quality</div>
+              <div id="quality" class="muted" style="font-size:13px;"></div>
+            </div>
+            <a id="download" class="dl" href="#" download>
+              ⬇ Download
+            </a>
+          </div>
+          <div class="muted" style="font-size:13px;">
+            Tip: If preview won’t autoplay (browser/CORS), thumbnail will show. Download still works.
+          </div>
+        </div>
+      </div>
+    </div>
+  </main> 
+
+  <footer>This tool fetches public video links. Respect creators’ rights and Facebook’s terms.</footer>
+
+<script>
+  // ====== CONFIG: set this to your backend base URL ======
+  const API_BASE = "https://your-backend.onrender.com"; // <-- change this
+
+  const urlInput = document.getElementById('url');
+  const clearBtn = document.getElementById('clear');
+  const fetchBtn = document.getElementById('fetch');
+  const statusEl = document.getElementById('status');
+  const resultEl = document.getElementById('result');
+  const titleEl = document.getElementById('title');
+  const qualityEl = document.getElementById('quality');
+  const videoEl = document.getElementById('preview');
+  const thumbEl = document.getElementById('fallbackThumb');
+  const downloadA = document.getElementById('download');
+
+  // Show/hide the clear (X) automatically
+  function toggleClear() {
+    const has = urlInput.value.trim().length > 0;
+    clearBtn.classList.toggle('show', has);
+  }
+  urlInput.addEventListener('input', toggleClear);
+  clearBtn.addEventListener('click', () => {
+    urlInput.value = '';
+    toggleClear();
+    urlInput.focus();
+  });
+
+  function setStatus(msg, type = '') {
+    statusEl.textContent = '';
+    statusEl.className = 'status';
+    if (!msg) return;
+    statusEl.classList.add(type ? type : '');
+    statusEl.innerHTML = msg;
+  }
+
+  async function getInfo(fbUrl) {
+    const u = new URL(API_BASE + '/api/info');
+    u.searchParams.set('url', fbUrl);
+    const res = await fetch(u.toString());
+    if (!res.ok) throw new Error('Server error fetching info');
+    return res.json();
+  }
+
+  function setLoading(on) {
+    fetchBtn.disabled = on;
+    fetchBtn.innerHTML = on ? '<span class="spinner"></span> &nbsp;Processing…' : 'Get Video';
+  }
+
+  async function handleFetch() {
+    const fbUrl = urlInput.value.trim();
+    if (!fbUrl) return setStatus('Please paste a Facebook video link.', 'err');
+
+    setStatus('');
+    setLoading(true);
+    resultEl.style.display = 'none';
+    videoEl.src = '';
+    thumbEl.src = '';
+    thumbEl.style.display = 'none';
+
+    try {
+      const data = await getInfo(fbUrl);
+      // data: { title, thumbnail, download_url, quality }
+      titleEl.textContent = data.title || 'Facebook Video';
+      qualityEl.textContent = data.quality || '';
+      downloadA.href = API_BASE + '/api/download?url=' + encodeURIComponent(data.download_url);
+      downloadA.setAttribute('download', (data.title || 'video') + '.mp4');
+
+      // Try to autoplay the direct video; fallback to thumbnail if blocked
+      videoEl.src = data.download_url;
+      videoEl.play().catch(() => {
+        videoEl.removeAttribute('src');
+        videoEl.load();
+        thumbEl.src = data.thumbnail || '';
+        thumbEl.style.display = data.thumbnail ? 'block' : 'none';
+      });
+
+      resultEl.style.display = 'flex';
+      setStatus('Ready. Click Download to save the video.', 'ok');
+    } catch (e) {
+      console.error(e);
+      setStatus('Failed to fetch video. Make sure the link is public and try again.', 'err');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  fetchBtn.addEventListener('click', handleFetch);
+  urlInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') handleFetch(); });
+
+  // Initialize clear button visibility
+  toggleClear();
+</script>
+</body>
+</html>
