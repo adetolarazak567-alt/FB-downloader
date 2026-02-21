@@ -195,7 +195,53 @@ def fetch_facebook_video(url):
 
     return None
 
+# ====== Fetch route (FAST preview) ======
 
+@app.route("/fetch", methods=["POST"])
+def fetch_video():
+
+    increment_stat("requests")
+
+    ip = request.remote_addr
+    add_unique_ip(ip)
+
+    data = request.get_json()
+    url = data.get("url")
+
+    if not url:
+        return jsonify({
+            "success": False,
+            "error": "No URL provided"
+        }), 400
+
+    try:
+
+        result = fetch_facebook_video(url)
+
+        if not result:
+            return jsonify({
+                "success": False,
+                "error": "Video not found or timeout"
+            }), 408
+
+        video_url, title = result
+
+        filename = clean_filename(title)
+
+        increment_stat("videos_served")
+
+        return jsonify({
+            "success": True,
+            "url": video_url,
+            "filename": filename
+        })
+
+    except Exception as e:
+
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 # ====== Download route ======
 
 @app.route("/download", methods=["POST"])
