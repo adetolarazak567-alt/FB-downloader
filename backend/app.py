@@ -161,15 +161,16 @@ def fetch_facebook_video(url):
 
     if url in cache:
 
-        stats["cache_hits"] += 1
-
         increment_stat("cache_hits")
 
         return cache[url]
 
     result = {}
 
-    t = threading.Thread(target=extract_video, args=(url, result))
+    t = threading.Thread(
+        target=extract_video,
+        args=(url, result)
+    )
 
     t.start()
 
@@ -187,31 +188,25 @@ def fetch_facebook_video(url):
 
         cache[url] = (video_url, title)
 
-    return cache.get(url)
+        return cache[url]
+
+    return None
 
 
 # ====== Download route ======
 
 @app.route("/download", methods=["POST"])
-
 def download_video():
-
-    stats["requests"] += 1
 
     increment_stat("requests")
 
     ip = request.remote_addr
-
-    stats["unique_ips"].add(ip)
-
     add_unique_ip(ip)
 
     data = request.get_json()
-
     url = data.get("url")
 
     if not url:
-
         return jsonify({"success": False, "error": "No URL provided"}), 400
 
     try:
@@ -219,41 +214,39 @@ def download_video():
         result = fetch_facebook_video(url)
 
         if not result:
-
             return jsonify({
                 "success": False,
-                "error": "Facebook blocked this video or server timeout"
+                "error": "Facebook blocked this video or timeout"
             }), 408
 
         video_url, title = result
 
-        stats["downloads"] += 1
+        # ✅ use your clean rename function
+        filename = clean_filename(title)
 
-        stats["videos_served"] += 1
+        # stream video
+        response = requests.get(video_url, stream=True)
+
+        video_stream = io.BytesIO(response.content)
 
         increment_stat("downloads")
-
         increment_stat("videos_served")
-
-        stats["download_logs"].append({
-            "ip": ip,
-            "url": url,
-            "timestamp": int(time.time())
-        })
 
         add_download_log(ip, url)
 
-        filename = clean_filename(title)
-
-        return jsonify({
-            "success": True,
-            "url": video_url,
-            "filename": filename
-        })
+        return send_file(
+            video_stream,
+            as_attachment=True,
+            download_name=filename,
+            mimetype="video/mp4"
+        )
 
     except Exception as e:
 
-        return jsonify({"success": False, "error": str(e)}), 500
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 
 # ====== Stats route ======
