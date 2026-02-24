@@ -6,6 +6,13 @@ import threading
 import sqlite3
 import os
 import re
+import random
+import string
+
+# ===== RANDOM STRING HELPER =====
+def random_string(length=6):
+    return ''.join(random.choices(string.ascii_letters + string.digits, k=length))
+
 
 app = Flask(__name__)
 CORS(app)
@@ -114,18 +121,14 @@ def get_db_stats():
         ]
     }
 
-# ====== CLEAN + SHORT RENAME FUNCTION ======
-
+# ====== CLEAN + RANDOM FILENAME FUNCTION =====
 def clean_filename(name):
-
     name = re.sub(r'[^a-zA-Z0-9 ]', '', name)
     name = re.sub(r'\s+', ' ', name).strip()
-
     if len(name) > 40:
         name = name[:40]
-
-    return f"{name} ToolifyX Downloader.mp4"
-
+    rand = random_string()
+    return f"{name} ToolifyX Downloader_{rand}.mp4"
 
 # ====== Helper function with timeout ======
 
@@ -264,6 +267,39 @@ def get_stats():
 
     return jsonify(get_db_stats())
 
+
+# ====== ADMIN PASSWORD ======
+ADMIN_PASSWORD = "razzyadminX567"  # same as your dashboard prompt
+@app.route("/admin/reset", methods=["POST"])
+def reset_stats():
+    data = request.get_json()
+    password = data.get("password")
+
+    if password != ADMIN_PASSWORD:
+        return jsonify({"success": False, "message": "Wrong password"}), 401
+
+    # --- Reset RAM stats ---
+    stats["requests"] = 0
+    stats["downloads"] = 0
+    stats["cache_hits"] = 0
+    stats["videos_served"] = 0
+    stats["unique_ips"] = set()
+    stats["download_logs"] = []
+
+    cache.clear()  # clear RAM cache if you want
+
+    # --- Reset SQLite tables ---
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+
+    c.execute("UPDATE stats SET requests=0, downloads=0, cache_hits=0, videos_served=0 WHERE id=1")
+    c.execute("DELETE FROM unique_ips")
+    c.execute("DELETE FROM download_logs")
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"success": True})
 
 # ====== Start server ======
 
