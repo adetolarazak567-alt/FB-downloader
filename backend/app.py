@@ -8,6 +8,14 @@ import os
 import re
 import random
 import string
+from dotenv import load_dotenv
+
+# ===== LOAD ENV VARIABLES =====
+load_dotenv()
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD")
+
+if not ADMIN_PASSWORD:
+    raise ValueError("ADMIN_PASSWORD not set in environment variables")
 
 # ===== RANDOM STRING HELPER =====
 def random_string(length=6):
@@ -268,8 +276,8 @@ def get_stats():
     return jsonify(get_db_stats())
 
 
-# ====== ADMIN PASSWORD ======
-ADMIN_PASSWORD = "razzyadminX567"  # same as your dashboard prompt
+# ====== ADMIN RESET ROUTE ======
+
 @app.route("/admin/reset", methods=["POST"])
 def reset_stats():
     data = request.get_json()
@@ -286,7 +294,7 @@ def reset_stats():
     stats["unique_ips"] = set()
     stats["download_logs"] = []
 
-    cache.clear()  # clear RAM cache if you want
+    cache.clear()
 
     # --- Reset SQLite tables ---
     conn = sqlite3.connect(DB_FILE)
@@ -300,6 +308,7 @@ def reset_stats():
     conn.close()
 
     return jsonify({"success": True})
+
 
 # ====== Start server ======
 
