@@ -9,6 +9,7 @@ import re
 import random
 import string
 from dotenv import load_dotenv
+import requests  # ✅ NEW (for resolving share links)
 
 # ===== LOAD ENV VARIABLES =====
 load_dotenv()
@@ -138,6 +139,16 @@ def clean_filename(name):
     rand = random_string()
     return f"{name} ToolifyX Downloader_{rand}.mp4"
 
+# ====== NEW: RESOLVE FACEBOOK SHARE LINKS ======
+def resolve_facebook_url(url):
+    try:
+        if "facebook.com/share/" in url:
+            response = requests.get(url, allow_redirects=True, timeout=10)
+            return response.url
+        return url
+    except:
+        return url
+
 # ====== Helper function with timeout ======
 
 def extract_video(url, result_holder):
@@ -225,6 +236,9 @@ def download_video():
 
         return jsonify({"success": False, "error": "No URL provided"}), 400
 
+    # ✅ NEW LINE: resolve share links first
+    url = resolve_facebook_url(url)
+
     try:
 
         result = fetch_facebook_video(url)
@@ -286,7 +300,6 @@ def reset_stats():
     if password != ADMIN_PASSWORD:
         return jsonify({"success": False, "message": "Wrong password"}), 401
 
-    # --- Reset RAM stats ---
     stats["requests"] = 0
     stats["downloads"] = 0
     stats["cache_hits"] = 0
@@ -296,7 +309,6 @@ def reset_stats():
 
     cache.clear()
 
-    # --- Reset SQLite tables ---
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
 
