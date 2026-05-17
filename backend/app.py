@@ -1,4 +1,5 @@
-from flask import Flask, request, jsonify, redirect
+
+from flask import Flask, request, jsonify, redirect, Response
 from flask_cors import CORS
 import yt_dlp
 import time
@@ -9,7 +10,7 @@ import re
 import random
 import string
 from dotenv import load_dotenv
-import requests  # ✅ NEW (for resolving share links)
+import requests
 
 # ===== LOAD ENV VARIABLES =====
 load_dotenv()
@@ -236,7 +237,7 @@ def download_video():
 
         return jsonify({"success": False, "error": "No URL provided"}), 400
 
-    # ✅ NEW LINE: resolve share links first
+    # resolve share links first
     url = resolve_facebook_url(url)
 
     try:
@@ -279,6 +280,73 @@ def download_video():
     except Exception as e:
 
         return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ====== FILE SERVING (RESUMABLE) ======
+
+@app.route("/file")
+def serve_file():
+
+    video_url = request.args.get("url")
+    mode = request.args.get("mode", "preview")
+
+    if not video_url:
+        return jsonify({"success": False, "message": "No video URL"}), 400
+
+    try:
+        # Parse Range header from client (e.g., "bytes=0-1023" or "bytes=1024-")
+        range_header = request.headers.get("Range")
+
+        # Build request headers to forward to source
+        source_headers = {}
+        if range_header:
+            source_headers["Range"] = range_header
+
+        # Request from source with range support
+        r = requests.get(video_url, stream=True, timeout=15, headers=source_headers)
+
+        rand = random_string()
+        filename = f"ToolifyX Downloader-{rand}.mp4"
+
+        # Determine response status
+        status_code = 206 if r.status_code == 206 else 200
+
+        # Build response headers
+        headers = {
+            "Content-Type": r.headers.get("Content-Type", "video/mp4"),
+            "Accept-Ranges": "bytes",  # Tell client we support resume
+        }
+
+        # Forward Content-Range if source sent it (partial content)
+        if "Content-Range" in r.headers:
+            headers["Content-Range"] = r.headers["Content-Range"]
+
+        # Forward Content-Length (either full or partial)
+        if "Content-Length" in r.headers:
+            headers["Content-Length"] = r.headers["Content-Length"]
+
+        # Content-Disposition
+        disposition = (
+            f'attachment; filename="{filename}"'
+            if mode == "download"
+            else f'inline; filename="{filename}"'
+        )
+        headers["Content-Disposition"] = disposition
+
+        # Stream generator
+        def generate():
+            for chunk in r.iter_content(chunk_size=65536):
+                if chunk:
+                    yield chunk
+
+        return Response(
+            generate(),
+            status=status_code,
+            headers=headers
+        )
+
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
 
 
 # ====== Stats route ======
