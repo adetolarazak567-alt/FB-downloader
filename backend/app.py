@@ -169,10 +169,9 @@ def extract_video(url, result_holder):
             info = ydl.extract_info(url, download=False)
 
             result_holder["url"] = info.get("url")
-
-            title = info.get("title", "Video")
-
-            result_holder["title"] = title
+            result_holder["title"] = info.get("title", "Video")
+            result_holder["author"] = info.get("uploader", "")
+            result_holder["thumbnail"] = info.get("thumbnail", "")
 
     except Exception as e:
 
@@ -180,14 +179,6 @@ def extract_video(url, result_holder):
 
 
 def fetch_facebook_video(url):
-
-    if url in cache:
-
-        stats["cache_hits"] += 1
-
-        increment_stat("cache_hits")
-
-        return cache[url]
 
     result = {}
 
@@ -202,14 +193,20 @@ def fetch_facebook_video(url):
         return None
 
     video_url = result.get("url")
-
     title = result.get("title", "Video")
+    author = result.get("author", "")
+    thumbnail = result.get("thumbnail", "")
 
     if video_url:
 
-        cache[url] = (video_url, title)
+        return {
+            "video_url": video_url,
+            "title": title,
+            "author": author,
+            "thumbnail": thumbnail
+        }
 
-    return cache.get(url)
+    return None
 
 
 # ====== Download route ======
@@ -250,7 +247,10 @@ def download_video():
                 "error": "Facebook blocked this video or server timeout"
             }), 408
 
-        video_url, title = result
+        video_url = result["video_url"]
+        title = result["title"]
+        author = result["author"]
+        thumbnail = result["thumbnail"]
 
         stats["downloads"] += 1
 
@@ -273,7 +273,11 @@ def download_video():
         return jsonify({
             "success": True,
             "url": video_url,
-            "filename": filename
+            "filename": filename,
+            "title": title,
+            "author": author,
+            "thumbnail": thumbnail,
+            "videoId": url
         })
 
     except Exception as e:
@@ -281,13 +285,23 @@ def download_video():
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-# ====== FILE SERVING (RESUMABLE) ======
+# ====== FILE SERVING (RE-FETCH FRESH URL) ======
 
 @app.route("/file")
 def serve_file():
 
+    # Support both old "url" param and new "videoId" param
     video_url = request.args.get("url")
+    video_id = request.args.get("videoId")
     mode = request.args.get("mode", "preview")
+
+    # If videoId provided, re-fetch fresh URL
+    if video_id and not video_url:
+        result = fetch_facebook_video(video_id)
+        if result:
+            video_url = result["video_url"]
+        else:
+            return jsonify({"success": False, "message": "Could not re-fetch video. Link may be expired or invalid."}), 500
 
     if not video_url:
         return jsonify({"success": False, "message": "No video URL"}), 400
